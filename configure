@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+import argparse
+author='Julien Fouret'
+contact='julien@fouret.me'
+
+parser = argparse.ArgumentParser(description='Configure makefile for installation',epilog="Author : "+author+" for more informations or enquiries please contact "+contact,formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('-prefix', metavar='', required=False,default=".", help="Output directory")
+args=parser.parse_args()
+
+import os
+with open('makefile','w') as mf:
+	mf.write("prefix="+os.path.abspath(args.prefix)+"\n")
+	mfrst=open("makefile.rst")
+	mf.write(mfrst.read())
+	mfrst.close()
+	
+		
