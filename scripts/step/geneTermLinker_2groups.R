@@ -1,11 +1,11 @@
 ### Function ###
 
 loadData=function(conf,exclude=c(),n=4){
-  suppressMessages(require(topGO))
   suppressMessages(require(dplyr))
-  GOffspring <- c(as.list(GOBPOFFSPRING),as.list(GOCCOFFSPRING),as.list(GOMFOFFSPRING))
+  print("Start reading config file")
   confdata=read.table(conf,header=T,sep="\t",as.is = T)
   newHeader=c('group','space','id','desc','allGenes','genes','N','pval')
+  print("Start reading data files")
   for (i in 1:dim(confdata)[1]){
     CfileName=confdata[i,'file']
     Cgroup=confdata[i,'group']
@@ -30,22 +30,12 @@ loadData=function(conf,exclude=c(),n=4){
     tmpdata=tmpdata[,sourceHeader]
     colnames(tmpdata)=newHeader
     tmpdata=subset(tmpdata,!(space %in% exclude))
-    data_threshold=as.data.frame(tmpdata %>% group_by(space) %>% summarise(threshold=mean(N)+n*sd(N)))
-    row.names(data_threshold)=data_threshold$space
-    filtered=filter(tmpdata,(pval<CprobMax)&(N<data_threshold[space,'threshold'])&(genes!=''))
-    if (Ctitle=='go'|Ctitle=='Go'|Ctitle=='GO'){
-      goVector=filtered$id
-      goKeep=logical(length = length(goVector))
-      names(goKeep)=filtered$id
-      for (goID in goVector){
-        offspring=GOffspring[goID]
-        if (length(intersect(offspring,goVector))>0){
-          goKeep[goID]=F
-        }else{
-          goKeep[goID]=T
-        }
-      }
-      filtered=filtered[goKeep,]
+    if (n==0){
+      filtered=filter(tmpdata,(pval<CprobMax)&(genes!=''))
+    }else{
+      data_threshold=as.data.frame(tmpdata %>% group_by(space) %>% summarise(threshold=mean(N)+n*sd(N)))
+      row.names(data_threshold)=data_threshold$space
+      filtered=filter(tmpdata,(pval<CprobMax)&(N<data_threshold[space,'threshold'])&(genes!=''))
     }
     if (i==1){
       data=filtered
@@ -55,6 +45,7 @@ loadData=function(conf,exclude=c(),n=4){
   }
   return(data)
 }
+
 integrateGroupData=function(data,genesA,genesB,genesG){
   require(dplyr)
   dA=filter(data,group=='A')
@@ -334,7 +325,7 @@ plotCL=function(cl,h){
   op = par(bg = "white")
   nb_group=max(cutree(cl,h=h*max(cl$height)))
   cols = rainbow(nb_group)
-  return(A2Rplot(cl, k = nb_group, boxes = FALSE, col.up = "black", col.down = cols,show.labels=F))
+  return(A2Rplot(cl, k = max(nb_group,2), boxes = FALSE, col.up = "black", col.down = cols,show.labels=F))
 }
 
 combine.brown=function(data_matrix,pval_list){
@@ -366,7 +357,7 @@ breaks_meta=function(data_meta,net_terms){
   return(data_meta)
 }
 
-analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,genesBUniversFile,prefixPatternList,printGraph=F,subAnalyse=T,Glim=-0.8,topPer=25,hlim=0.5,pvalLim=0.01){
+analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,genesBUniversFile,prefixPatternList,printGraph=F,subAnalyse=T,Glim=-0.8,topPer=25,hlim=0.5,pvalLim=0.01,geneMap=""){
   suppressMessages(require('igraph'))
   suppressMessages(require('ggplot2'))
   suppressMessages(require('grid'))
@@ -385,13 +376,19 @@ analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,
   onlyA=setdiff(genesA,genesB)
   onlyB=setdiff(genesB,genesA)
   allGenes=unique(c(genesA,genesB))
-  genesG=rep.int(0, length(allGenes))
+  genesG=rep.int(0.5, length(allGenes))
   names(genesG)=allGenes
-  genesG[onlyA]=1
-  genesG[onlyB]=-1
+  genesG[onlyA]=0
+  genesG[onlyB]=1
   ##genesG[genesG==0]
   filtered=loadData(conf,exclude=c("go_cellular_component","go_molecular_function"))
   print("Data Loaded from config file")
+  
+  dir.create("output",recursive = T)
+  setwd("output")
+  
+  print("output directory created")
+  
   dataSum=as.data.frame(filtered %>% group_by(group,space) %>% summarise(count=n()))
   print(dataSum)
   filtered=integrateGroupData(filtered,genesA,genesB,genesG)
@@ -419,7 +416,8 @@ analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,
     subPath=paste('subnet',subNum,sep='')
     dir.create(subPath,showWarnings = F)
     setwd(subPath)
-    if (length(V(independent_subnets[[subNum]]))>1){
+    write(V(independent_subnets[[subNum]])$name,"vertices_name.txt")
+    if (length(V(independent_subnets[[subNum]]))>5){
       cl=getCluster(incid_mat[V(independent_subnets[[subNum]])$name,])
       print(paste(subPath,"Term clustered using cosine distance and Ward.D2 algorithm"))
       pdf(file=fileName)
@@ -471,10 +469,10 @@ analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,
   k=max(data_meta$metagroup)
   
   info=c(
-    paste("A group (G=1)  from:",genesAFile),
-    paste("B group (G=-1) from:",genesBFile),
-    paste("A group univers (G=1)  from:",genesAUniversFile),
-    paste("B group univers (G=-1) from:",genesBUniversFile),
+    paste("A group (G=0)  from:",genesAFile),
+    paste("B group (G=1) from:",genesBFile),
+    paste("A group univers (G=0)  from:",genesAUniversFile),
+    paste("B group univers (G=1) from:",genesBUniversFile),
     paste("Enriched term details from the config file:",conf,"\n\n"),
     knitr::kable(dataSum),collapse="\n",
     paste("prefix to remove ? ",paste(prefixPatternList,collapse=" | ")),
@@ -562,8 +560,8 @@ analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,
     scale_x_continuous(breaks=1:k)+
     coord_flip()+
     theme_bw()
-  ggsave(filename = "metagroups_summary.pdf",graph_meta,height = 1+0.5*max(data_meta$metagroup),width = 8)
-  write.table(summary_meta,"summary_meta.tab",quote = F,sep = "\t",row.names = F)
+  ggsave(filename = "metagroups_summary.pdf",graph_meta,height = 1+0.5*max(data_meta$metagroup),width = 8,limitsize = F)
+  write.table(summary_meta[,c("metagroup","nGenes","nTerms","N","pval","G")],"summary_meta.tab",quote = F,sep = "\t",row.names = F)
   row.names(filtered)=filtered$id
   for (mgi in 1:dim(summary_meta)[1]){
     filename=paste("metagroup_",mgi,'.txt',sep='')
@@ -594,9 +592,10 @@ analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,
   V(netMetaTerms)[V(netMetaTerms)$cat=='term']$G=Gterm[V(netMetaTerms)[V(netMetaTerms)$cat=='term']]
   V(netMetaTerms)$desc=V(netMetaTerms)$name
   V(netMetaTerms)[V(netMetaTerms)$cat=='term']$desc=DESCterm[V(netMetaTerms)[V(netMetaTerms)$cat=='term']]
-  print("metagroup-term network annotated")
+  print("graphs/metagroup-term network annotated")
+  dir.create("graphs",recursive = T)
   write_graph(netMetaTerms, 'netMetaTerms.graphml', format ="graphml")
-  print("metagroup-term network writed")
+  print("graphs/metagroup-term network writed")
   netMetaGenes=graph_from_incidence_matrix(incid_meta_genes)
   print("metagroup-genes network infered")
   #Annotation of network metagroups + genes
@@ -623,8 +622,19 @@ analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,
   V(net_term_genes)[V(net_term_genes)$cat=='term']$desc=DESCterm[V(net_term_genes)[V(net_term_genes)$cat=='term']$name]
   V(net_term_genes)$meta=0
   V(net_term_genes)[V(net_term_genes)$cat=='term']$meta=termMetaAnnot[V(net_term_genes)[V(net_term_genes)$cat=='term']$name]
+  if (geneMap!=""){
+    data_gm=read.delim(geneMap,sep="\t",header=F,as.is=T)
+    id2geneNames=data_gm$V2
+    names(id2geneNames)=data_gm$V1
+    V(net_term_genes)[V(net_term_genes)$cat=='gene']$desc=id2geneNames[V(net_term_genes)[V(net_term_genes)$cat=='gene']$name]
+  }
   print("gene-term network annotated")
-  write_graph(net_term_genes, 'net_term_genes.graphml', format ="graphml")
+  write_graph(net_term_genes, 'graphs/net_term_genes.graphml', format ="graphml")
+  for (i in seq(1,nrow(summary_meta))){
+    edge_mg=incident_edges(net_term_genes,V(net_term_genes)[V(net_term_genes)$meta==i])
+    sub_mg=subgraph.edges(net_term_genes,unlist(edge_mg))
+    write_graph(sub_mg,paste('graphs/mg',i,'_term_genes.graphml',sep=""), format ="graphml")
+  }
   print("gene-term network writed as net_term_genes.graphml")
   net.bg<-bipartite.projection(net_term_genes)
   print("gene-term network projected")
@@ -634,6 +644,8 @@ analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,
   print("Extract term network from the projection")
   V(netTerms)$label <- labels[V(netTerms)$name]
   print("Term network annotated")
+  
+  
   
   if (subAnalyse){
     print("subanalysis started")
@@ -652,8 +664,8 @@ analyseNetworks_2groups=function(conf,n,genesAFile,genesBFile,genesAUniversFile,
       centrality=betweenness(subnet, v = V(subnet), directed = FALSE, weights = NULL,
                              nobigint = TRUE, normalized = TRUE)
       centralities[[as.character(group)]]=data.frame(name=V(subnet)$name,cat=V(subnet)$cat,G=V(subnet)$G,betweenness=centrality[V(subnet)$name])
-      candidates[[as.character(group)]]=subset(centralities[[as.character(group)]],(cat=="gene")&(G!=1))$name
-      topCandidates[[as.character(group)]]=subset(subset(centralities[[as.character(group)]][order(centralities[[as.character(group)]]$betweenness,decreasing = T),],(cat=="gene")&(G!=1))[1:as.integer(length(candidates[[as.character(group)]])*topPer/100),],betweenness!=0)$name
+      candidates[[as.character(group)]]=subset(centralities[[as.character(group)]],(cat=="gene")&(G==1))$name
+      topCandidates[[as.character(group)]]=subset(subset(centralities[[as.character(group)]][order(centralities[[as.character(group)]]$betweenness,decreasing = T),],(cat=="gene")&(G==1))[1:as.integer(length(candidates[[as.character(group)]])*topPer/100),],betweenness!=0)$name
       if (is.null(df_candidates)){
         df_candidates=data.frame(name=candidates[[as.character(group)]],mg=rep(group,length(candidates[[as.character(group)]])))
         df_topCandidates=data.frame(name=topCandidates[[as.character(group)]],mg=rep(group,length(topCandidates[[as.character(group)]])))
