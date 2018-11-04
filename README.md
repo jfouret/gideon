@@ -12,7 +12,32 @@ It is up to you to perform the gene identification, you might want to use the `g
 ## DE: Database Enrichment
 After gene identification you must have a database to perform enrichment analyses. This step can be done using the script `scripts/step/database_enrichment.R` (`-h` for help)
 
-after enrichment of both A and B gene list you should put results file in a file called `config.txt` to further analysis
+```
+user@machine:path/to/gideon$ Rscript scripts/step/database_enrichment.R -h
+usage: scripts/step/database_enrichment.R [--] [--help] [--opts OPTS] [-i -I [-u -U [-a -A [-o -O [-p -P [-r -R [-t -T
+
+R program designed to perform an enrichment analysis with topology-based annotation. Over-representation analysis is performed according to the parent-child-intersection method. Multi-testing is done with BH and Bonferoni methods on the subset of term with a minimal p-value below 1e-7 by default. P-values are based on combination analysis as described in the parent-child paper using GNU multiple precision arithmetic libraries and their R implementation
+
+
+flags:
+  -h, --help                    show this help message and exit
+
+optional arguments:
+  -x, --opts OPTS                       RDS file containing argument values
+  -i, -i I                      input gene list return-separated with no header.
+  -u, -u U                      universe gene list return-separated with no header.
+  -a, -a A                      annotation table. This table is tab delimited with a header (term,genes,type,name,parents). The column genes contains the comma separated list of genes in a term
+  -o, -o O                      output prefix
+  -p, -p P                      minimum value for pmin (hihgest possible p-value) [default: 1e-7]
+  -r, -r R                      regex pattern to remove from gene name [default: -.*]
+  -t, -t T                      comma-separated list of type to keep (keep all by default) [default: ]
+```
+
+## ON: Occurence Network
+
+after enrichment of both A and B gene list you should link results file in a file called `config.txt` to further analysis
+
+### config file format
 
 This need to be a tab-separated file with the following header
 
@@ -38,7 +63,9 @@ A/interpro.tab       A       interpro        NA      term    name    genes   GI 
 A/reactome.tab       A       reactome        NA      term    name    genes   GI      pval    0.1   Ngenes
 ```
 
-## ON: Occurence Network
+The final step of gideon is encoded within a R function `analyseNetwork_2groups`
+
+### Example of usage:
 
 ```
 setwd('.')
