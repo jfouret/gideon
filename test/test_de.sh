@@ -28,6 +28,8 @@ do
 			-a ../../../databases/${j}.tab \
 			-o enriched \
 			$(echo $type)
+
+		cd ..
 	done
 	cd ..
 done
