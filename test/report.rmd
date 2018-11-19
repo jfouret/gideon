@@ -1,0 +1,128 @@
+---
+title: "Testing dataset for Gideon"
+output: 
+  html_document:
+    toc: true # table of content true
+    toc_depth: 4  # upto three depths of headings (specified by #, ## and ###)
+    number_sections: true  ## if you want number sections at each table header
+    theme: united  # many options for theme, this one is my favorite.
+    highlight: tango  # specifies the syntax highlighting style
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F,eval=T,results = 'asis',warning = F,message = F)
+```
+
+# Introduction
+
+Gideon method have been developed to predict genotype/phenotype association. It works by mining functional relationships between a gene list representative of the genotype and another list representative of the phenotype.
+
+It has been first developped to links a signature of molecular evolution for one branch of life with a particular phenotype of interest among many specific phenotypes to the branch of interest.
+
+# Data introduction
+
+```{r definitions}
+require(ggplot2)
+
+aspaces=c('reactome','uniprot_keywords','interpro')
+genoList=c('PS_pteropus')
+phenoLists=c('IPSc','NipahPPI','santarius_I_II','siRNA_required')
+allLists=c(genoList,phenoLists)
+aspacePvalLimits=c(0.05,0.05,0.001)
+
+names(aspacePvalLimits)=aspaces
+get_results=function(name,aspace){
+  folder=paste('de/',name,'/',aspace,sep='')
+  file=paste(folder,'/enriched.tab',sep='')
+  fileInfo=paste(folder,'/enriched.info.tab',sep='')
+  system(paste('cd ',folder," ; grep -v '=' enriched.info | sed -r 's/(  )+/\t/g' | sed -r 's/\\\\\\t//g' > enriched.info.tab",sep=""))
+  info=read.delim(fileInfo,header = T,as.is = T,sep = "\t")
+  cat("\n\n**Information relative to the number of genes considered for enrichment**")
+  print(knitr::kable(info))
+  cat("\n\n**Result of enrichment analysis**\n\n")
+  df=read.delim(file,header=T,as.is=T)
+  statNgenes=subset(df,pval<aspacePvalLimits[aspace])[,c('term','Ngenes','pval','qval_BH')]
+  statNgenes$glist=name
+  statNgenes$aspace=aspace
+  results=subset(df,pval<aspacePvalLimits[aspace])[,c('name','NGI','Ngenes','parent_NGI','parent_Ngenes','pval')]
+  results=results[order(results$pval),]
+  results$pval=format.pval(results$pval,digits = 3)
+  print(knitr::kable(results,row.names=F))
+  return(statNgenes)
+}
+
+input=list()
+uniqueafterGsub=list()
+
+for (name in allLists){
+  cat(paste("\n## Gene list : ",name,"\n\n",sep=''))
+  fileList=paste('gi/',name,'.txt',sep='')
+  fileInfo=paste('gi/',name,'.info',sep='')
+  writeLines(readLines(fileInfo))
+  input[[name]]=read.delim(fileList,header = F,as.is = T)$V1
+  uniqueafterGsub[[name]]=unique(gsub(pattern = '-.*',replacement = '',x = input[[name]],perl = T))
+}
+
+```
+
+# Analysis before gideon 
+
+## Enrichment analysis
+
+```{r EnrichmentTable}
+name=genoList
+statNgenes <- data.frame(term=character(),
+                         Ngenes=integer(),
+                         glist=character(),
+                         aspace=character(),
+                         pval=numeric(),
+                         qval_BH=numeric())
+for (name in allLists){
+  cat(paste("\n### Gene list : ",name,sep=''))
+  for (aspace in aspaces){
+    cat(paste("\n#### Annotation space : ",aspace,sep=''))
+    tmp=get_results(name,aspace)
+    statNgenes=rbind(statNgenes,tmp)
+  }
+}
+
+```
+
+### Conclusion
+
+The enrichment analysis is fundamentally biased for this analysis. Indeed it aims at identifying a major and global overlaps which is higher than expected randomly. It answer the question 
+
+'**what is the main functions, pathways or protein represented in a given set of genes ?**'. 
+
+If we focus on results 'PS_Pteropus' list there is only some 
+
+Our question is different. 
+
+## Gene overlap analysis 
+
+```{r Overlaps}
+inputVenn=matrix(0,nrow=length(allLists),ncol=length(allLists),dimnames = list(allLists,allLists))
+uniqueafterGsubVenn=matrix(0,nrow=length(allLists),ncol=length(allLists),dimnames = list(allLists,allLists))
+for (name1 in allLists){
+  for (name2 in allLists){
+      inputVenn[name1,name2]=length(intersect(input[[name1]],input[[name2]]))
+      uniqueafterGsubVenn[name1,name2]=length(intersect(uniqueafterGsub[[name1]],uniqueafterGsub[[name2]]))
+  }
+}
+```
+
+### Co-occurences matrix
+
+#### using informationat isoform level
+
+```{r}
+knitr::kable(inputVenn)
+```
+
+
+#### using information at gene level
+
+```{r}
+knitr::kable(uniqueafterGsubVenn)
+```
